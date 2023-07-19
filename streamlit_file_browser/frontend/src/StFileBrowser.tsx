@@ -165,7 +165,13 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
   }
 
   folderOpenHandler = (opts: FileBrowserFolder) => this.ajustHeight()
+  
   folderCloseHandler = (opts: FileBrowserFolder) => this.ajustHeight()
+
+  folderSelectHandler = (opts: FileBrowserFolder) => {
+    const file = {path: opts.key} // this.args.files.find((file) => file.path === opts.key)
+    file && noticeStreamlit({ type: StreamlitEventType.SELECT_FOLDER, target: file })
+  }
 
   fileSelectedHandler = (opts: FileBrowserFile) => {
     if (!this.args.ignore_file_select_event) {
@@ -231,6 +237,7 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
           onFolderOpen={this.folderOpenHandler}
           onFolderClose={this.folderCloseHandler}
           onSelect={this.fileSelectedHandler}
+          onSelectFolder={this.folderSelectHandler}
           onDownloadFile={this.downlandHandler}
           onDeleteFile={this.deleteFileHandler}
           actionRenderer={(...args: any) => {
