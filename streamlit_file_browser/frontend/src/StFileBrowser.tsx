@@ -169,8 +169,19 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
   folderCloseHandler = (opts: FileBrowserFolder) => this.ajustHeight()
 
   folderSelectHandler = (opts: FileBrowserFolder) => {
-    const file = {path: opts.key} // this.args.files.find((file) => file.path === opts.key)
-    file && noticeStreamlit({ type: StreamlitEventType.SELECT_FOLDER, target: file })
+    if (typeof opts !== 'undefined')
+    {
+      let name = opts?.key.includes("/") ? opts?.key.split("/").slice(-2)[0] : opts?.key
+      const file = {path: opts?.key, name: name}
+      file && noticeStreamlit({ type: StreamlitEventType.SELECT_FOLDER, target: file })
+    }
+  }
+
+  createFolderHandler = (key: string) => {
+    let name = key.includes("/") ? key.split("/").slice(-2)[0] : key
+    const file = {path: key, name: name}
+    this.args.files = this.args.files.concat([file])
+    file && noticeStreamlit({ type: StreamlitEventType.CREATE_FOLDER, target: file })
   }
 
   fileSelectedHandler = (opts: FileBrowserFile) => {
@@ -236,14 +247,16 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
           files={this.convertFiles(this.args.files)}
           onFolderOpen={this.folderOpenHandler}
           onFolderClose={this.folderCloseHandler}
-          onSelect={this.fileSelectedHandler}
+          onSelectFile={this.fileSelectedHandler}
           onSelectFolder={this.folderSelectHandler}
           onDownloadFile={this.downlandHandler}
           onDeleteFile={this.deleteFileHandler}
+          onCreateFolder={this.createFolderHandler}
           actionRenderer={(...args: any) => {
             return Actions({
               ...args[0],
               ...{
+                canCreateFolder: that.args.show_new_folder,
                 canChooseFile: that.args.show_choose_file,
                 canDownloadFile:
                   that.args.show_download_file &&

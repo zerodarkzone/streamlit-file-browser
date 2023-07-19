@@ -215,6 +215,13 @@ def _get_file_info(root, path):
     info['name'] = os.path.basename(path)
     return info
 
+def _get_dir_info(root, path):
+    stat = os.stat(path)
+    info = {
+        "path": path[len(root)+1:] + '/',
+    }
+    info['name'] = os.path.basename(path)
+    return info
 
 def ensure_tree_cache(
         path: str,
@@ -232,10 +239,13 @@ def ensure_tree_cache(
     root = pathlib.Path(os.path.abspath(path))
 
     files = [root / f for f in glob.glob(root_dir=path, patterns=glob_patterns, flags=glob.GLOBSTAR | glob.NODIR, limit=limit)]
+    dirs = [x[0] for x in os.walk(path)]
     for ignore in (file_ignores or []):
         files = filter(lambda f: (not ignore.match(os.path.basename(f))) if isinstance(ignore, re.Pattern) else (
                     os.path.basename(f) not in file_ignores), files)
     files = [_get_file_info(str(root), str(path)) for path in files]
+    dirs = [_get_dir_info(str(root), str(path)) for path in dirs]
+    files = files + dirs
 
     if use_cache:
         with open(cache_path, 'w+') as cache_file:
@@ -287,6 +297,7 @@ def st_file_browser(path: str, *, show_preview=True, show_preview_top=False,
         if not artifacts_download_site and artifacts_site:
             artifacts_download_site = artifacts_site
         event = _component_func(files=files,
+            show_new_folder=show_new_folder,
             show_choose_file=show_choose_file,
             show_download_file=show_download_file,
             show_delete_file=show_delete_file,
