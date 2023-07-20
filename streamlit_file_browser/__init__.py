@@ -3,6 +3,7 @@ import re
 import json
 import os.path
 import pathlib
+import shutil
 from wcmatch import glob
 from urllib.parse import urljoin
 from html import escape
@@ -262,6 +263,7 @@ def st_file_browser(path: str, *, show_preview=True, show_preview_top=False,
         show_delete_file=False,
         show_choose_file=False, show_download_file=True,
         show_new_folder=False, show_upload_file=False,
+        show_delete_folder=False,
         limit=10000,
         artifacts_site=None, artifacts_download_site=None,
         key=None,
@@ -301,6 +303,7 @@ def st_file_browser(path: str, *, show_preview=True, show_preview_top=False,
             show_choose_file=show_choose_file,
             show_download_file=show_download_file,
             show_delete_file=show_delete_file,
+            show_delete_folder=show_delete_folder,
             ignore_file_select_event=ignore_file_select_event,
             artifacts_download_site=artifacts_download_site,
             artifacts_site=artifacts_site, key=key)
@@ -317,8 +320,31 @@ def st_file_browser(path: str, *, show_preview=True, show_preview_top=False,
             elif show_preview and not show_preview_top:
                 with st.expander('', expanded=True):
                     show_file_preview(str(root), file, artifacts_site)
+            if show_download_file:
+                with open(os.path.join(root, file["path"]), "rb") as f:
+                    st.download_button("Download", f, file_name=file["name"])
+
+        elif event["type"] == "DELETE_FILE":
+            for file in event["target"]:
+                target = pathlib.Path(os.path.join(root, file["path"]))
+                if target.is_file():
+                    target.unlink(missing_ok=True)
+                    st.write("Deleted file: `%s`" % target.name)
+
+        elif event["type"] == "DELETE_FOLDER":
+            for file in event["target"]:
+                target = pathlib.Path(os.path.join(root, file["path"]))
+                if target.is_dir():
+                    shutil.rmtree(target, ignore_errors=True)
+                    st.write("Deleted folder: `%s`" % target.name)
+
+        elif event["type"] == "CREATE_FOLDER":
+            file = event["target"]
+            pathlib.Path(os.path.join(root, file["path"])).mkdir(
+                parents=True, exist_ok=True
+            )
     return event
-                
+
 
 if _DEVELOP_MODE or os.getenv('SHOW_FILE_BROWSER_DEMO'):
     current_path = os.path.dirname(os.path.abspath(__file__))

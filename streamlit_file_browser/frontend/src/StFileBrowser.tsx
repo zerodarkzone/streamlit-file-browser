@@ -1,4 +1,5 @@
 import React from "react"
+import ReactDOM from 'react-dom'
 import {
   Streamlit,
   StreamlitComponentBase,
@@ -16,6 +17,15 @@ import IframeResizer from 'iframe-resizer-react'
 import Actions from "./actions"
 import "react-keyed-file-browser/dist/react-keyed-file-browser.css"
 import "font-awesome/css/font-awesome.min.css"
+
+interface JSFile extends Blob {
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/File/lastModified) */
+  readonly lastModified: number;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/File/name) */
+  readonly name: string;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/File/webkitRelativePath) */
+  readonly webkitRelativePath: string;
+}
 
 interface File {
   path: string
@@ -59,6 +69,7 @@ interface IArgs {
   show_delete_file: boolean
   show_choose_file: boolean
   show_new_folder: boolean
+  show_delete_folder: boolean
   show_upload_file: boolean
   ignore_file_select_event: boolean
   static_file_server_path: string
@@ -137,10 +148,13 @@ class FileBrowserStaticServer extends StreamlitComponentBase<State> {
   
 class FileBrowserNative extends StreamlitComponentBase<State> {
   private args: IArgs
+  private deleted: boolean
 
   constructor(props: ComponentProps) {
     super(props)
     this.args = props.args
+    this.deleted = false
+    console.log(props.args)
   }
 
   ajustHeight(revoke_step?: number) {
@@ -157,6 +171,11 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
   }
 
   componentDidMount() {
+    /*let that = this
+    window.addEventListener('message', function(event) {
+      console.log(event);
+      //that.args = event?.data?.args ?? that.args
+    });*/
     this.ajustHeight()
   }
 
@@ -182,6 +201,11 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
     const file = {path: key, name: name}
     this.args.files = this.args.files.concat([file])
     file && noticeStreamlit({ type: StreamlitEventType.CREATE_FOLDER, target: file })
+  }
+
+  createFilesHandler = (files: JSFile[], prefix: string) => {
+    console.log(files)
+    console.log(prefix)
   }
 
   fileSelectedHandler = (opts: FileBrowserFile) => {
@@ -210,14 +234,36 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
   }
 
   deleteFileHandler = (fileKey: string | string[]) => {
-    const files = this.args.files.filter((file) => typeof fileKey === 'string' ? fileKey === file.path : fileKey.includes(file.path))
+    let files = this.args.files.filter((file) => typeof fileKey === 'string' ? fileKey === file.path : fileKey.includes(file.path))
+    files = files.filter((file) => !file.path.endsWith("/"))
     console.log("deleteFileHandler", "key", fileKey, "files ", files)
 
     files.length &&
       noticeStreamlit({ type: StreamlitEventType.DELETE_FILE, target: files })
 
-    const remainingFiles = this.args.files.filter((file) => typeof fileKey === 'string' ? fileKey !== file.path : !fileKey.includes(file.path))
+    //const remainingFiles = this.args.files.filter((file) => typeof fileKey === 'string' ? fileKey !== file.path : !fileKey.includes(file.path))
+    const remainingFiles = this.args.files.filter((file) => !files.includes(file))
+    console.log(remainingFiles)
     this.args.files = remainingFiles
+    this.deleted = true
+  }
+
+  deleteFolderHandler = (folderKey: string) => {
+    
+    // const files = this.args.files.filter((file) => typeof folderKey === 'string' ? folderKey === file.path : folderKey.includes(file.path))
+    const files = this.args.files.filter((file) => file.path.startsWith(folderKey))
+    console.log("deleteFolderHandler", "key", folderKey, "files ", files)
+
+    files.length &&
+      noticeStreamlit({ type: StreamlitEventType.DELETE_FOLDER, target: files })
+    
+    console.log(this.args.files)
+    console.log(typeof folderKey)
+    // const remainingFiles = this.args.files.filter((file) => typeof folderKey === 'string' ? !file.path.startsWith(folderKey) : !folderKey.includes(file.path))
+    const remainingFiles = this.args.files.filter((file) => !file.path.startsWith(folderKey))
+    console.log(remainingFiles)
+    this.args.files = remainingFiles
+    this.deleted = true
   }
 
   chooseHandler = (keys: string[]) => {
@@ -236,8 +282,19 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
   noop = () => <></>
   public render = () => {
     let that = this
+    if ((this.props.args.files.length > this.args.files.length) && !this.deleted) {
+      console.log("files:", this.args.files)
+      console.log("prop files:", this.props.args.files)
+      this.args.files = this.props.args.files
+    }
+    console.log("files:", this.args.files)
+    if (this.deleted) {
+      console.log("deleted")
+      this.props.args.files = this.args.files
+      this.deleted = false
+    }
     return (
-      <div>
+      // <div>
         <FileBrowser
           {...this.args}
           showActionBar
@@ -251,7 +308,9 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
           onSelectFolder={this.folderSelectHandler}
           onDownloadFile={this.downlandHandler}
           onDeleteFile={this.deleteFileHandler}
+          onDeleteFolder={this.deleteFolderHandler}
           onCreateFolder={this.createFolderHandler}
+          onCreateFiles={this.createFilesHandler}
           actionRenderer={(...args: any) => {
             return Actions({
               ...args[0],
@@ -262,6 +321,7 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
                   that.args.show_download_file &&
                   that.args.artifacts_download_site,
                 canDeleteFile: that.args.show_delete_file,
+                canDeleteFolder: that.args.show_delete_folder,
                 onChooseFile: (keys: string[]) =>
                   that.chooseHandler(
                     args[0].selectedItems.map((i: any) => i.key)
@@ -270,11 +330,15 @@ class FileBrowserNative extends StreamlitComponentBase<State> {
                   that.deleteFileHandler(
                       args[0].selectedItems.map((i: any) => i.key)
                   ),
+                onDeleteFolder: (fileKey: string[]) =>
+                  that.deleteFolderHandler(
+                      args[0].selectedItems.map((i: any) => i.key)
+                  ),
               },
             })
           }}
         />
-      </div>
+      // </div>
     )
   }
 }
@@ -286,6 +350,7 @@ class FileBrowserWrapper extends StreamlitComponentBase<State> {
   
   constructor(props: ComponentProps) {
     super(props)
+    console.log(props)
     this.args = props.args
   }
 
@@ -298,9 +363,9 @@ class FileBrowserWrapper extends StreamlitComponentBase<State> {
       )
     } else {
       return (
-        <div>
+        //<div>
           <StreamlitFileBrowserNative {...this.props} />
-        </div>
+        //</div>
       )
     }
   }
